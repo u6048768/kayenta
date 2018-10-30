@@ -79,14 +79,15 @@ class MannWhitneyClassifier(tolerance: Double=0.25,
   }
 
   /**
-    * Calculate the deviation (Effect Size) between the experiment and control
+    * Calculate the deviation (effect size) between the experiment and control
     */
   private def calculateDeviation(experiment: Array[Double], control: Array[Double]): Double = {
-    if(StatUtils.mean(control) == 0.0) 1.0 else EffectSizes.meanRatio(control, experiment)
+    if(StatUtils.mean(control) == 0.0) Double.NaN else EffectSizes.meanRatio(control, experiment)
   }
 
   /**
     * Compare the experiment to the control using the Mann-Whitney U Test and check the magnitude of the effect
+    * Note: If the effect size (deviation) cannot be computed, the effect size comparison is ignored
     */
   private def compare(control: Metric,
                       experiment: Metric,
@@ -100,22 +101,28 @@ class MannWhitneyClassifier(tolerance: Double=0.25,
     //Check if the experiment is high in comparison to the control
     val isHigh = {
       (direction == MetricDirection.Increase || direction == MetricDirection.Either) &&
-        mwResult.lowerConfidence > upperBound &&
-        mwResult.deviation >= effectSizeThresholds._2
+        mwResult.lowerConfidence > upperBound
     }
 
     //Check if the experiment is low in comparison to the control
     val isLow = {
       (direction == MetricDirection.Decrease || direction == MetricDirection.Either) &&
-        mwResult.upperConfidence < lowerBound &&
-        mwResult.deviation <= effectSizeThresholds._1
+        mwResult.upperConfidence < lowerBound
     }
 
-    if(isHigh){
+    //Check the magnitude of the effect (difference between the experiment and control)
+    val isLargeIncrease = mwResult.deviation >= effectSizeThresholds._2
+    val isLargeDecrease = mwResult.deviation <= effectSizeThresholds._1
+
+    //If the effect size (deviation) cannot be computed, the effect size comparison is ignored
+    val highResult = if(mwResult.deviation.isNaN) isHigh else isHigh && isLargeIncrease
+    val lowResult = if(mwResult.deviation.isNaN) isLow else isLow && isLargeDecrease
+
+    if(highResult){
       val reason = s"${experiment.name} was classified as $High"
       ComparisonResult(High, Some(reason), mwResult.deviation)
 
-    }else if(isLow){
+    }else if(lowResult){
       val reason = s"${experiment.name} was classified as $Low"
       ComparisonResult(Low, Some(reason), mwResult.deviation)
 

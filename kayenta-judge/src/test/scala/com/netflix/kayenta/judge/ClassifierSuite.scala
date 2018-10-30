@@ -17,6 +17,8 @@
 package com.netflix.kayenta.judge
 
 import com.netflix.kayenta.judge.classifiers.metric._
+import com.netflix.kayenta.judge.detectors.IQRDetector
+import com.netflix.kayenta.judge.preprocessing.Transforms
 import org.scalatest.FunSuite
 
 
@@ -623,6 +625,35 @@ class ClassifierSuite extends FunSuite{
 
     assert(result.classification == High)
   }
+
+  test("Mann-Whitney Sparse Control Metric"){
+    val experimentData = Array(
+      0.05000000074505806, 0.05000000074505806, 0.01666666753590107,
+      0.01666666753590107, 0.01666666753590107, 0.05000000074505806,
+      0.03333333507180214, 0.05000000260770321, 0.05000000260770321,
+      0.13333333656191826,
+    )
+
+    val controlData = Array(
+      Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
+      Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0.06666667014360428
+    )
+
+    val detector = new IQRDetector(factor = 3.0, reduceSensitivity = true)
+    val transform = Function.chain[Metric](Seq(Transforms.replaceNaNs, Transforms.removeOutliers(_, detector)))
+
+    val experimentMetric = Metric("high-metric", experimentData, "canary")
+    val controlMetric = Metric("high-metric", controlData, "baseline")
+
+    val transformedExperiment = transform(experimentMetric)
+    val transformedControl = transform(controlMetric)
+
+    val classifier = new MannWhitneyClassifier(tolerance = 0.10, confLevel = 0.95, effectSizeThresholds=(0.8, 1.2))
+    val result = classifier.classify(transformedControl, transformedExperiment, MetricDirection.Either, NaNStrategy.Replace)
+
+    assert(result.classification == High)
+  }
+
 
   test("Mean Inequality Classifier Test: High Metric"){
     val experimentData = Array(10.0, 20.0, 30.0, 40.0, 50.0)
