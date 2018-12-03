@@ -161,11 +161,22 @@ class MannWhitneyClassifier(tolerance: Double=0.25,
     val comparison = compare(control, experiment, direction, effectSizeThresholds)
 
     //Check if the metric was marked as critical, and if the metric was classified as a failure (High, Low)
-    if(isCriticalMetric && comparison.classification == High && comparison.deviation >= criticalThresholds._2){
+    val isCriticalHigh = isCriticalMetric && comparison.classification == High
+    val isCriticalLow = isCriticalMetric && comparison.classification == Low
+
+    //Check the magnitude of the effect (difference between the experiment and control)
+    val isCriticalIncrease = comparison.deviation >= criticalThresholds._2
+    val isCriticalDecrease = comparison.deviation <= criticalThresholds._1
+
+    //If the effect size (deviation) cannot be computed, the effect size comparison is ignored
+    val highCriticalResult = if(comparison.deviation.isNaN) isCriticalHigh else isCriticalHigh && isCriticalIncrease
+    val lowCriticalResult = if(comparison.deviation.isNaN) isCriticalLow else isCriticalLow && isCriticalDecrease
+
+    if(highCriticalResult){
       val reason = s"The metric ${experiment.name} was classified as $High (Critical)"
       MetricClassification(High, Some(reason), comparison.deviation, critical = true)
 
-    }else if(isCriticalMetric && comparison.classification == Low && comparison.deviation <= criticalThresholds._1){
+    }else if(lowCriticalResult){
       val reason = s"The metric ${experiment.name} was classified as $Low (Critical)"
       MetricClassification(Low, Some(reason), comparison.deviation, critical = true)
 
